@@ -41,8 +41,8 @@
           <n-input v-model:value="data.callPeerId" />
         </n-form-item>
       </n-form>
-      <!-- <n-button> Kết Nối </n-button> -->
-      <n-button @click.stop="startVoice"> Start With Audio </n-button>
+      <n-button @click.stop="connectLocalCamera"> Test Camera </n-button>
+      <n-button @click.stop="startVoice"> Start </n-button>
     </n-card>
     <n-grid :x-gap="12" :cols="2" class="mt-5">
       <n-grid-item>
@@ -114,31 +114,35 @@ const data = reactive({
 })
 
 const prepareAudioVideoDevice = async () => {
-  return navigator.mediaDevices.enumerateDevices().then((deviceInfos) => {
-    const _audios = []
-    const _videos = []
-    if (!deviceInfos?.length) {
-      _audios.push({ label: 'không xác định', value: '' })
-      _videos.push({ label: 'không xác định', value: '' })
-    } else {
-      for (const i in deviceInfos) {
-        const deviceInfo = deviceInfos[i]
-        if (deviceInfo.kind === 'audioinput') {
-          _audios.push({
-            label: deviceInfo.label || `Microphone ${data.audios.length + 1}`,
-            value: deviceInfo.deviceId
-          })
-        } else if (deviceInfo.kind === 'videoinput') {
-          _videos.push({
-            label: deviceInfo.label || `Camera  ${data.videos?.length + 1}`,
-            value: deviceInfo.deviceId
-          })
+  try {
+    navigator.mediaDevices?.enumerateDevices().then((deviceInfos) => {
+      const _audios = []
+      const _videos = []
+      if (!deviceInfos?.length) {
+        _audios.push({ label: 'không xác định', value: '' })
+        _videos.push({ label: 'không xác định', value: '' })
+      } else {
+        for (const i in deviceInfos) {
+          const deviceInfo = deviceInfos[i]
+          if (deviceInfo.kind === 'audioinput') {
+            _audios.push({
+              label: deviceInfo.label || `Microphone ${data.audios.length + 1}`,
+              value: deviceInfo.deviceId
+            })
+          } else if (deviceInfo.kind === 'videoinput') {
+            _videos.push({
+              label: deviceInfo.label || `Camera  ${data.videos?.length + 1}`,
+              value: deviceInfo.deviceId
+            })
+          }
         }
       }
-    }
-    data.audios = _audios
-    data.videos = _videos
-  })
+      data.audios = _audios
+      data.videos = _videos
+    })
+  } catch (e) {
+    alert(`Error: No found enumerateDevices`)
+  }
 }
 const changeAudioVideo = () => {
   nextTick(() => {
@@ -216,10 +220,11 @@ const makeCall = () => {
 const connectCall = (call) => {
   endCall()
   call.on('stream', (stream) => {
+    console.log('on stream')
     data.theirStream = stream
     nextTick(() => {
-      //   this.$refs.theirVideo.srcObject = stream
-      //   this.$refs.theirVideo.play()
+      theirVideo.value.srcObject = stream
+      theirVideo.value.play()
     })
   })
   data.call = call
