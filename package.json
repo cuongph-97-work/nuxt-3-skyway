@@ -7,7 +7,9 @@
     "preview": "nuxt preview"
   },
   "devDependencies": {
-    "nuxt": "3.0.0-rc.6"
+    "nuxt": "3.0.0-rc.6",
+    "sass": "^1.54.0",
+    "sass-loader": "10"
   },
   "dependencies": {
     "@css-render/vue3-ssr": "^0.15.10",

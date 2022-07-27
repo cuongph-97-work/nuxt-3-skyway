@@ -1,7 +1,6 @@
 <template>
   <NConfigProvider inline-theme-disabled>
     <NSpace vertical>
-      <NSwitch v-model:value="collapsed" />
       <NLayout has-sider>
         <NLayoutSider
           bordered
@@ -24,7 +23,15 @@
           />
         </NLayoutSider>
         <NLayout>
-          <slot />
+          <div style="width: 100%">
+            <n-loading-bar-provider>
+              <n-message-provider>
+                <n-dialog-provider>
+                  <slot />
+                </n-dialog-provider>
+              </n-message-provider>
+            </n-loading-bar-provider>
+          </div>
         </NLayout>
       </NLayout>
     </NSpace>
@@ -35,6 +42,8 @@
 import {
   NSpace,
   NConfigProvider,
+  NMessageProvider,
+  NDialogProvider,
   NSwitch,
   NLayout,
   NLayoutSider,
@@ -52,18 +61,20 @@ import { RouterLink } from 'vue-router'
 const collapsed = ref(false)
 const menuOptions = [
   {
+    key: 'home',
     label: 'Home',
     to: {
       name: 'index'
     },
-    icon: () => HomeIcon
+    icon_text: HomeIcon
   },
   {
+    key: 'p2p',
     label: '(1 đến 1, P2P)',
     to: {
       name: 'p2p_videochat'
     },
-    icon: () => VideocamOutline
+    icon_text: VideocamOutline
   }
   //   {
   //     label: '(nhiều người chơi, P2P)',
@@ -88,7 +99,7 @@ const menuOptions = [
   //   }
 ]
 const renderMenuIcon = (option: any) => {
-  return h(NIcon, null, { default: () => h(option.icon) })
+  return h(NIcon, null, { default: () => h(option.icon_text) })
 }
 const renderMenuLabel = (option: any) => {
   return h(
