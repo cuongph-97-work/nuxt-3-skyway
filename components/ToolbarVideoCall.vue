@@ -1,10 +1,16 @@
 <script lang="ts" setup>
 onMounted(() => {})
+const emits = defineEmits(['onOffMic', 'onStopShare', 'onShare'])
+interface props {
+  isSharing: boolean
+}
+const props = defineProps<props>()
 const offmic = ref(false)
 const offvideo = ref(false)
-const shareScreen = ref(false)
+const isSharing = ref(false)
 const turnOffmic = () => {
   offmic.value = !offmic.value
+  emits('onOffMic', offmic.value)
 }
 const turnOffVideo = () => {
   const playPause = (video: any) => {
@@ -16,9 +22,18 @@ const turnOffVideo = () => {
   playPause(camElement?.querySelector('video'))
   camElement?.classList.toggle('disabled')
 }
-const turnOnShare = () => {
-  shareScreen.value = !shareScreen.value
-}
+watch(isSharing, (val) => {
+  if (val == true) emits('onShare')
+  if (val == false) emits('onStopShare')
+})
+onMounted(() => {
+  watch(
+    () => props.isSharing,
+    (val) => {
+      isSharing.value = val
+    }
+  )
+})
 </script>
 <template>
   <div class="ui-container">
@@ -85,10 +100,10 @@ const turnOnShare = () => {
       </button>
       <button
         class="button-share-element"
-        :class="shareScreen ? 'active' : ''"
-        @click="turnOnShare"
+        :class="isSharing ? 'active' : ''"
+        @click="isSharing = !isSharing"
       >
-        <span class="icon icon-share" :class="shareScreen ? 'active' : ''">
+        <span class="icon icon-share" :class="isSharing ? 'active' : ''">
           <svg
             width="14"
             height="13"

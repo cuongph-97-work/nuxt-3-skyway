@@ -9,7 +9,6 @@ onMounted(() => {
     () => props.src,
     (val) => {
       myVideoRef.value.srcObject = val
-      myVideoRef.value.play().catch(console.error)
     },
     {
       immediate: true
@@ -20,7 +19,7 @@ onMounted(() => {
 <template>
   <div class="cam-container">
     <div class="video">
-      <video ref="myVideoRef" muted="true" playsinline></video>
+      <video ref="myVideoRef" muted="true" playsinline autoplay></video>
     </div>
     <div class="content">
       <span class="name">You</span>

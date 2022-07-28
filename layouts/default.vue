@@ -24,6 +24,7 @@
         </NLayoutSider>
         <NLayout>
           <div style="width: 100%">
+            <n-back-top />
             <n-loading-bar-provider>
               <n-message-provider>
                 <n-dialog-provider>
@@ -44,9 +45,10 @@ import {
   NConfigProvider,
   NMessageProvider,
   NDialogProvider,
-  NSwitch,
+  NLoadingBarProvider,
   NLayout,
   NLayoutSider,
+  NBackTop,
   NMenu
 } from 'naive-ui'
 import { h, ref, defineComponent } from 'vue'
