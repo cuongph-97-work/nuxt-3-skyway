@@ -1,25 +1,19 @@
 <script setup lang="ts">
-interface Props {
-  src: any
-}
-const myVideoRef = ref()
-const props = defineProps<Props>()
-onMounted(() => {
-  watch(
-    () => props.src,
-    (val) => {
-      myVideoRef.value.srcObject = val
-    },
-    {
-      immediate: true
-    }
-  )
-})
+import { useVideoStore } from '~~/stores/video'
+
+const toolbarStore = useVideoStore()
+const localVideoStream = computed(() => toolbarStore.getLocalVideoStream)
 </script>
 <template>
   <div class="cam-container">
     <div class="video">
-      <video ref="myVideoRef" muted="true" playsinline autoplay></video>
+      <video
+        ref="myVideoRef"
+        muted="true"
+        :srcObject="localVideoStream"
+        playsinline
+        autoplay
+      ></video>
     </div>
     <div class="content">
       <span class="name">You</span>

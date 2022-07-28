@@ -37,17 +37,12 @@
       close-on-esc="false"
       mask-closable="false"
     >
-      <VideoCallScreen
-        @on-change-toolbar="onChangeToolbar"
-        :my-video-stream="localVideoStream"
-        :remote-video-stream="remoteVideoStream"
-        :remote-share-stream="remoteShareScreenStream"
-      />
+      <VideoCallScreen :peer="peer" />
     </n-card>
   </n-modal>
 </template>
 <script language="ts" setup>
-import Peer from 'skyway-js'
+import Peer, { MediaConnection } from 'skyway-js'
 import { VideocamOutline, HomeOutline as HomeIcon } from '@vicons/ionicons5'
 import { getListMedia } from '../utils/helper'
 import {
@@ -68,9 +63,9 @@ import {
   NMessageProvider
 } from 'naive-ui'
 import { VideoCallScreen } from '~~/.nuxt/components'
+import { useVideoStore } from '~~/stores/video'
 const message = useMessage()
 const dialog = useDialog()
-const calling = ref(false)
 const formRef = ref()
 const rules = {
   remoteId: {
@@ -84,18 +79,11 @@ const peerId = ref()
 const form = reactive({
   remoteId: ''
 })
+const toolbarStore = useVideoStore()
 const audios = ref([])
 const videos = ref([])
-const currentPeer = ref()
 const lazyStream = ref()
-const peerList = reactive([])
-const remoteVideoStream = ref()
-const localVideoStream = ref()
 const isCalling = ref(false)
-const existingCall = ref()
-const remoteShareScreenStream = ref()
-const dataConnection = ref()
-const isConnectedData = ref(false)
 /**
  * choose media
  */
@@ -115,24 +103,42 @@ const callPeer = () => {
         isCalling.value = true
         nextTick(() => {
           lazyStream.value = stream
-          streamLocalVideo(stream)
-          const mediaConnection = peer.value.call(form.remoteId, stream)
-          dataConnection.value = peer.value.connect(form.remoteId)
-          dataConnection.value.on('open', () => {
-            isConnectedData.value = true
+          toolbarStore.setStreamLocalVideo(stream)
+          toolbarStore.currentLocalMDC = staticPeer.value?.call(
+            form.remoteId,
+            stream
+          )
+          toolbarStore.dataConnection = toolbarStore.staticPeer?.connect(
+            form.remoteId
+          )
+          toolbarStore.dataConnection.on('data', ({ type, data }) => {
+            console.log(type)
+            if (type == 'trigger') {
+              const { type: _type, message } = data
+              if (_type == 'reject_call') {
+                toolbarStore.currentLocalMDC.close(true)
+                message.error('đối phương đã từ chối!')
+              }
+            }
           })
-          mediaConnection.on('stream', (remoteStream) => {
-            streamShareScreen(remoteStream)
-            // streamRemoteVideo(remoteStream)
+          // dataConnection.value = staticPeer.value?.connect(form.remoteId)
+          // dataConnection.value.on('open', () => {
+          //   isConnectedData.value = true
+          // })
+          toolbarStore.currentLocalMDC.on('stream', (remoteStream) => {
+            // streamShareScreen(remoteStream)
+            toolbarStore.setStreamRemoteVideo(remoteStream)
             // if (mediaConnection.open) {
             //   console.log(mediaConnection, mediaConnection.getPeerConnection())
             //   currentPeer.value = mediaConnection.getPeerConnection()
             // }
           })
-          existingCall.value = mediaConnection
-          mediaConnection.once('close', () => {
-            stream.getTracks().forEach((track) => track.stop())
-            streamLocalVideo(null)
+          toolbarStore.currentLocalMDC.on('close', () => {
+            isCalling.value = false
+            nextTick(() => {
+              message.error('cuộc gọi đã kế t thúc')
+              toolbarStore.resetAllStream()
+            })
           })
         })
       })
@@ -141,90 +147,32 @@ const callPeer = () => {
     }
   })
 }
-/**
- * listen datachanel
- */
-dataConnection.value.on('data', (data) => {
-  if (data?.share?.off) {
-  }
-})
-
-/**
- * stream remote video
- */
-const streamRemoteVideo = (remoteStream) => {
-  remoteVideoStream.value = remoteStream
-}
-const streamShareScreen = (remoteStream) => {
-  remoteShareScreenStream.value = remoteStream
-}
-const streamLocalVideo = (localStream) => {
-  localVideoStream.value = localStream
-}
-/**
- * listen for incoming
- */
-const addListenerPeer = (peer) => {
-  peer.on('call', (mediaConnection) => {
-    hasCallRequest(mediaConnection)
-  })
-}
-
-const onChangeToolbar = (data) => {
-  if (data?.shareScreen) {
-    const {
-      status,
-      videoTrack: _videoTrack,
-      stream: _stream
-    } = data.shareScreen
-    /** status share */
-    if (status) {
-      /** share screen */
-      // console.log(currentPeer.value)
-      // const sender = currentPeer.value
-      //   .getSenders()
-      //   .find((s) => s.track.kind === _videoTrack.kind)
-      if (existingCall.value) {
-        console.log('===========> replace stream call')
-        existingCall.value.replaceStream(_stream)
-      }
-    } else {
-      /** stop share */
-      // const videoTrack = lazyStream.value.getVideoTracks()[0]
-      // console.log(lazyStream.value.getVideoTracks(), videoTrack)
-      // console.log('video track kind: ' + videoTrack?.kind)
-      // if (currentPeer.value && videoTrack) {
-      //   const sender = currentPeer.value
-      //     .getSenders()
-      //     .find((s) => s.track.kind === videoTrack.kind)
-      //   sender?.replaceTrack(videoTrack)
-      // }
-      const streamEmpty = new MediaStream()
-      existingCall.value.replaceStream(streamEmpty)
-    }
-  }
-}
 const prepareAudioVideoDevice = async () => {
   const { audios: _audios, videos: _videos } = await getListMedia()
   audios.value = _audios
   videos.value = _videos
 }
-
+const staticPeer = computed(() => toolbarStore.getStaticPeer)
 onMounted(async () => {
-  peer.value = new Peer({
+  const peer = new Peer({
     key: 'c16c9ba9-6443-4c5a-b950-5c57f7fe7a1e',
-    debug: 3
+    debug: 0
   })
-
-  peer.value.once('open', (id) => (peerId.value = id))
-  peer.value.on('error', (err) => {
+  toolbarStore.setStaticPeer(peer)
+  staticPeer.value?.once('open', (id) => (peerId.value = id))
+  staticPeer.value?.on('error', (err) => {
     console.error(`peer event error:`, err)
   })
-  peer.value.on('disconnected', () => {
+  staticPeer.value?.on('disconnected', () => {
     console.log(`peer event disconnected`)
   })
   // Cài đặt sự kiện sắp tới
-  addListenerPeer(peer.value)
+  staticPeer.value?.on('call', (mediaConnection) => {
+    toolbarStore.dataConnection = toolbarStore.staticPeer.connect(
+      mediaConnection.remoteId
+    )
+    hasCallRequest(mediaConnection)
+  })
   await prepareAudioVideoDevice()
 })
 const hasCallRequest = (mediaConnection) => {
@@ -240,29 +188,36 @@ const hasCallRequest = (mediaConnection) => {
         .then((stream) => {
           isCalling.value = true
           lazyStream.value = stream
-          streamLocalVideo(stream)
+          toolbarStore.setStreamLocalVideo(stream)
           mediaConnection.answer(stream)
           mediaConnection.on('stream', (remoteStream) => {
-            console.log('==========>: ', remoteStream)
-            // if (!peerList.includes(mediaConnection.remoteId)) {
-            streamShareScreen(remoteStream)
-            // currentPeer.value = mediaConnection.remoteIdConnection
-            // peerList.push(mediaConnection.remoteId)
-            // }
+            toolbarStore.setStreamRemoteVideo(remoteStream)
           })
-          existingCall.value = mediaConnection
-          mediaConnection.once('close', () => {
-            // remoteVideoStream.value = null
-            remoteShareScreenStream.value = null
+          toolbarStore.currentRemoteMDC = mediaConnection
+          mediaConnection.on('close', () => {
+            isCalling.value = false
+            nextTick(() => {
+              message.error('cuộc gọi đã kế t thúc')
+              toolbarStore.resetAllStream()
+            })
           })
         })
         .catch((err) => {
+          alert(err + 'Unable to get media')
           console.log(err + 'Unable to get media')
         })
     },
     onNegativeClick: () => {
       message.error('từ chối!')
-      mediaConnection.close(true)
+      const data = {
+        type: 'trigger',
+        data: {
+          type: 'reject_call',
+          reason: 'từ chối!'
+        }
+      }
+      console.log(toolbarStore.dataConnection)
+      toolbarStore.dataConnection.send(data)
     }
   })
 }

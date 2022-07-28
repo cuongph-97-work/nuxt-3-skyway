@@ -1,36 +1,98 @@
 <script lang="ts" setup>
+import { useVideoStore } from '~~/stores/video'
+
 onMounted(() => {})
-const emits = defineEmits(['onOffMic', 'onStopShare', 'onShare'])
-interface props {
-  isSharing: boolean
-}
-const props = defineProps<props>()
-const offmic = ref(false)
-const offvideo = ref(false)
-const isSharing = ref(false)
-const turnOffmic = () => {
-  offmic.value = !offmic.value
-  emits('onOffMic', offmic.value)
-}
-const turnOffVideo = () => {
-  const playPause = (video: any) => {
-    if (video.paused) video.play()
-    else video.pause()
-  }
-  offvideo.value = !offvideo.value
-  const camElement = document.querySelector('.cam-container')
-  playPause(camElement?.querySelector('video'))
-  camElement?.classList.toggle('disabled')
-}
-watch(isSharing, (val) => {
-  if (val == true) emits('onShare')
-  if (val == false) emits('onStopShare')
-})
+const toolbarStore = useVideoStore()
+const staticPeer: any = computed(() => toolbarStore.getStaticPeer)
+const toolbar = computed(() => toolbarStore.getStatusToolbar)
+const localVideoStream = computed(() => toolbarStore.getLocalVideoStream)
 onMounted(() => {
   watch(
-    () => props.isSharing,
-    (val) => {
-      isSharing.value = val
+    () => toolbarStore.videoOn,
+    async (isOn) => {
+      if (isOn) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: !!isOn,
+          audio: !!toolbar.value.micOn
+        })
+        toolbarStore.setStreamLocalVideo(stream)
+        toolbarStore.currentLocalMDC?.replaceStream(stream)
+      } else {
+        localVideoStream.value?.getVideoTracks().forEach((track) => {
+          console.log(track)
+          track.stop()
+        })
+      }
+      nextTick(() => {
+        const playPause = (video: any) => {
+          if (video.paused) video.play()
+          else video.pause()
+        }
+        const camElement = document.querySelector('.cam-container')
+        playPause(camElement?.querySelector('video'))
+        camElement?.classList.toggle('disabled')
+      })
+    }
+  )
+  watch(
+    () => toolbar.value.shareOn,
+    (isOn: boolean) => {
+      console.log(isOn)
+      if (isOn) {
+        const displayMediaOptions = {
+          video: true,
+          audio: false
+          // audio: {
+          //   echoCancellation: true,
+          //   noiseSuppression: true
+          // }
+        }
+        nextTick(() => {
+          navigator.mediaDevices
+            .getDisplayMedia(displayMediaOptions)
+            .then((screenStream) => {
+              toolbarStore.setStreamShareVideo(screenStream)
+              screenStream.getVideoTracks().forEach((videoTrack) => {
+                videoTrack.onended = () => {
+                  // toolbarConfig.shareScreen = {
+                  //   status: false,
+                  //   videoTrack: null,
+                  //   stream: null
+                  // }
+                  // emits('onChangeToolbar', toolbarConfig)
+                  return
+                }
+              })
+              // Object.assign(toolbarConfig.shareScreen, {
+              //   status: true,
+              //   stream: screenStream
+              // })
+              // emits('onChangeToolbar', toolbarConfig)
+            })
+            .catch((err) => {
+              console.log('Unable to get display media ' + err)
+              toolbarStore.toggleShareBtn()
+            })
+        })
+      } else {
+        toolbarStore.stopShareScreen()
+        // nextTick(() => {
+        //   // toolbarConfig.shareScreen = {
+        //   //   status: false,
+        //   //   videoTrack: null,
+        //   //   stream: null
+        //   // }
+        //   // emits('onChangeToolbar', toolbarConfig)
+        // })
+      }
+    }
+  )
+  watch(
+    () => toolbar.value.micOn,
+    (isOn: boolean) => {
+      localVideoStream.value
+        ?.getAudioTracks()
+        .forEach((track) => (track.enabled = isOn))
     }
   )
 })
@@ -40,10 +102,13 @@ onMounted(() => {
     <div class="navigation-controls-container">
       <button
         class="button-mic-element switch"
-        :class="offmic ? 'active' : ''"
-        @click="turnOffmic"
+        :class="toolbar.micOn ? '' : 'active'"
+        @click="toolbarStore.toggleMicBtn"
       >
-        <span class="icon icon-mic-active" :class="offmic ? 'active' : ''">
+        <span
+          class="icon icon-mic-active"
+          :class="toolbar.micOn ? '' : 'active'"
+        >
           <svg
             width="12"
             height="15"
@@ -70,10 +135,13 @@ onMounted(() => {
       </button>
       <button
         class="button-cam-element switch"
-        :class="offvideo ? 'active' : ''"
-        @click="turnOffVideo"
+        :class="toolbar.videoOn ? '' : 'active'"
+        @click="toolbarStore.toggleVideoBtn"
       >
-        <span class="icon icon-cam-active" :class="offvideo ? 'active' : ''">
+        <span
+          class="icon icon-cam-active"
+          :class="toolbar.videoOn ? '' : 'active'"
+        >
           <svg
             width="14"
             height="13"
@@ -100,10 +168,10 @@ onMounted(() => {
       </button>
       <button
         class="button-share-element"
-        :class="isSharing ? 'active' : ''"
-        @click="isSharing = !isSharing"
+        :class="toolbar.shareOn ? 'active' : ''"
+        @click="toolbarStore.toggleShareBtn"
       >
-        <span class="icon icon-share" :class="isSharing ? 'active' : ''">
+        <span class="icon icon-share" :class="toolbar.shareOn ? 'active' : ''">
           <svg
             width="14"
             height="13"
