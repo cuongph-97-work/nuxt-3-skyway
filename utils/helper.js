@@ -160,6 +160,13 @@ export function requestPermissions() {
     })
 }
 export function getListMedia() {
+  if (
+    !navigator.mediaDevices ||
+    !('getDisplayMedia' in navigator.mediaDevices)
+  ) {
+    alert('getDisplayMedia is not supported')
+    return { audios: [], videos: [] }
+  }
   try {
     return navigator.mediaDevices?.enumerateDevices().then((deviceInfos) => {
       const _audios = []
@@ -185,6 +192,7 @@ export function getListMedia() {
       return { audios: _audios, videos: _videos }
     })
   } catch (e) {
-    alert(`Error: No found enumerateDevices`)
+    alert(e)
+    return { audios: [], videos: [] }
   }
 }

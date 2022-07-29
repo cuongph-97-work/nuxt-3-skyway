@@ -22,7 +22,9 @@
           <n-input v-model:value="form.remoteId" />
         </n-form-item>
       </n-form>
-      <n-button @click.stop="callPeer"> Bắt đầu cuộc gọi </n-button>
+      <n-button @click.stop="callPeer" :disabled="!peerId">
+        Bắt đầu cuộc gọi
+      </n-button>
     </n-card>
   </div>
   <n-modal v-model:show="isCalling">
@@ -40,6 +42,9 @@
       <VideoCallScreen :peer="peer" />
     </n-card>
   </n-modal>
+  <audio controls hidden loop ref="ringAudioRef">
+    <source src="../assets/audio/ring.mp3" type="audio/mpeg" />
+  </audio>
 </template>
 <script language="ts" setup>
 import Peer, { MediaConnection } from 'skyway-js'
@@ -79,61 +84,95 @@ const peerId = ref()
 const form = reactive({
   remoteId: ''
 })
+const ringAudioRef = ref()
 const toolbarStore = useVideoStore()
-const audios = ref([])
-const videos = ref([])
 const lazyStream = ref()
 const isCalling = ref(false)
 /**
  * choose media
  */
 const chooseMedia = () => {
-  return navigator.mediaDevices.getUserMedia({
-    video: !!videos.value.length,
-    audio: !!audios.value.length
+  if (navigator.mediaDevices && 'getDisplayMedia' in navigator.mediaDevices) {
+    return navigator.mediaDevices.getUserMedia({
+      video: !!toolbarStore.videos.length,
+      audio: !!toolbarStore.audios.length
+    })
+  } else {
+    alert('getDisplayMedia is not supported')
+  }
+}
+
+const localConnectData = (peer, remoteId) => {
+  if (!peer.open) {
+    return
+  }
+  const dataConnection = peer.connect(remoteId)
+  toolbarStore.dataConnection = dataConnection
+  dataConnection.once('open', async () => {
+    dataConnection.send(`=== DataConnection has been opened ===\n`)
+  })
+
+  dataConnection.on('data', (data) => {
+    console.log(data)
+    if (data?.type == 'trigger') {
+      const { type: _type, reason } = data.data
+      if (['reject_call', 'error'].includes(_type)) {
+        isCalling.value = false
+        toolbarStore.resetAllStream()
+        toolbarStore.currentLocalMDC.close(true)
+        message.error(reason)
+      }
+    }
+  })
+
+  dataConnection.once('close', () => {
+    dataConnection.send(`=== DataConnection has been closed ===\n`)
+  })
+}
+const remoteConnectData = (dataConnection) => {
+  toolbarStore.dataConnection = dataConnection
+  dataConnection.once('open', async () => {
+    dataConnection.send(`=== DataConnection has been opened ===\n`)
+  })
+
+  dataConnection.on('data', (data) => {
+    console.log(`Remote: ${data}\n`)
+  })
+
+  dataConnection.once('close', () => {
+    dataConnection.send(`=== DataConnection has been closed ===\n`)
   })
 }
 /**
  * call peer
  */
 const callPeer = () => {
+  toolbarStore.isConnected = false
   formRef.value?.validate((errors) => {
     if (!errors) {
-      chooseMedia().then((stream) => {
+      chooseMedia()?.then((stream) => {
         isCalling.value = true
         nextTick(() => {
           lazyStream.value = stream
           toolbarStore.setStreamLocalVideo(stream)
           toolbarStore.currentLocalMDC = staticPeer.value?.call(
             form.remoteId,
-            stream
-          )
-          toolbarStore.dataConnection = toolbarStore.staticPeer?.connect(
-            form.remoteId
-          )
-          toolbarStore.dataConnection.on('data', ({ type, data }) => {
-            console.log(type)
-            if (type == 'trigger') {
-              const { type: _type, message } = data
-              if (_type == 'reject_call') {
-                toolbarStore.currentLocalMDC.close(true)
-                message.error('đối phương đã từ chối!')
+            stream,
+            {
+              metadata: {
+                name: 'Cường Phan',
+                type: 'call'
               }
             }
-          })
-          // dataConnection.value = staticPeer.value?.connect(form.remoteId)
-          // dataConnection.value.on('open', () => {
-          //   isConnectedData.value = true
-          // })
+          )
+          toolbarStore.remoteId = form.remoteId
+          localConnectData(staticPeer.value, form.remoteId)
           toolbarStore.currentLocalMDC.on('stream', (remoteStream) => {
-            // streamShareScreen(remoteStream)
+            toolbarStore.isConnected = true
             toolbarStore.setStreamRemoteVideo(remoteStream)
-            // if (mediaConnection.open) {
-            //   console.log(mediaConnection, mediaConnection.getPeerConnection())
-            //   currentPeer.value = mediaConnection.getPeerConnection()
-            // }
           })
           toolbarStore.currentLocalMDC.on('close', () => {
+            toolbarStore.isConnected = false
             isCalling.value = false
             nextTick(() => {
               message.error('cuộc gọi đã kế t thúc')
@@ -148,44 +187,74 @@ const callPeer = () => {
   })
 }
 const prepareAudioVideoDevice = async () => {
-  const { audios: _audios, videos: _videos } = await getListMedia()
-  audios.value = _audios
-  videos.value = _videos
+  const { audios, videos } = await getListMedia()
+  if (audios.length || videos.length) {
+    toolbarStore.audios = audios
+    toolbarStore.videos = videos
+  } else {
+    alert('no audioinput & no videoinput')
+  }
 }
 const staticPeer = computed(() => toolbarStore.getStaticPeer)
-onMounted(async () => {
+const initPeer = async () => {
   const peer = new Peer({
     key: 'c16c9ba9-6443-4c5a-b950-5c57f7fe7a1e',
     debug: 0
   })
   toolbarStore.setStaticPeer(peer)
-  staticPeer.value?.once('open', (id) => (peerId.value = id))
-  staticPeer.value?.on('error', (err) => {
+  peer.once('open', (id) => (peerId.value = id))
+  peer.on('error', (err) => {
     console.error(`peer event error:`, err)
   })
-  staticPeer.value?.on('disconnected', () => {
+  peer.on('disconnected', () => {
     console.log(`peer event disconnected`)
   })
   // Cài đặt sự kiện sắp tới
-  staticPeer.value?.on('call', (mediaConnection) => {
-    toolbarStore.dataConnection = toolbarStore.staticPeer.connect(
-      mediaConnection.remoteId
-    )
-    hasCallRequest(mediaConnection)
+  peer.on('call', (mediaConnection) => {
+    toolbarStore.remoteMetadata = mediaConnection.metadata
+    if (mediaConnection.metadata.type == 'call') {
+      ringAudioRef.value?.play()
+      hasCallRequest(mediaConnection)
+    }
+    if (mediaConnection.metadata.type == 'share_screen') {
+      mediaConnection.on('close', () => {
+        toolbarStore.stopShareScreen()
+      })
+      mediaConnection.answer(null)
+      mediaConnection.on('stream', (remoteStream) => {
+        toolbarStore.setStreamShareVideo(remoteStream)
+        toolbarStore.isRemoteSharing = true
+      })
+      mediaConnection.on('close', () => {
+        console.log('close share')
+        toolbarStore.stopShareScreen()
+        toolbarStore.isRemoteSharing = false
+      })
+    }
+  })
+  peer.on('connection', (dataConnection) => {
+    remoteConnectData(dataConnection)
   })
   await prepareAudioVideoDevice()
+}
+onMounted(async () => {
+  const route = useRoute()
+  form.remoteId = route.query.remote_id
+  await initPeer()
 })
 const hasCallRequest = (mediaConnection) => {
+  toolbarStore.isConnected = true
   dialog.success({
     title: 'Thông báo',
-    content: 'Bạn có 1 cuộc gọi từ AAA',
+    content: 'Bạn có 1 cuộc gọi từ ' + mediaConnection.metadata.name,
     negativeText: 'Từ chối',
     positiveText: 'Chấp nhận',
     closeOnEsc: false,
     closable: false,
     onPositiveClick: () => {
       chooseMedia()
-        .then((stream) => {
+        ?.then((stream) => {
+          ringAudioRef.value.pause()
           isCalling.value = true
           lazyStream.value = stream
           toolbarStore.setStreamLocalVideo(stream)
@@ -204,6 +273,15 @@ const hasCallRequest = (mediaConnection) => {
         })
         .catch((err) => {
           alert(err + 'Unable to get media')
+          const data = {
+            type: 'trigger',
+            data: {
+              type: 'error',
+              reason: 'đối phương đã xảy ra lỗi'
+            }
+          }
+          ringAudioRef.value.pause()
+          toolbarStore.dataConnection?.send(data)
           console.log(err + 'Unable to get media')
         })
     },
@@ -213,11 +291,11 @@ const hasCallRequest = (mediaConnection) => {
         type: 'trigger',
         data: {
           type: 'reject_call',
-          reason: 'từ chối!'
+          reason: 'đối phương đã từ chối!'
         }
       }
-      console.log(toolbarStore.dataConnection)
-      toolbarStore.dataConnection.send(data)
+      ringAudioRef.value.pause()
+      toolbarStore.dataConnection?.send(data)
     }
   })
 }

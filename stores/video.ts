@@ -2,9 +2,16 @@ import { DataConnection, MediaConnection } from 'skyway-js'
 
 export const useVideoStore = defineStore('video_call', {
   state: () => ({
+    toolbarDisabled: false,
+    isSharing: false,
+    isConnected: false,
+    isRemoteSharing: false,
+    audios: [],
+    videos: [],
     micOn: true,
     shareOn: false,
     videoOn: true,
+    remoteId: null,
     localVideoStream: null as unknown as MediaStream,
     remoteVideoStream: null as unknown as MediaStream,
     localScreenStream: null as unknown as MediaStream,
@@ -12,7 +19,10 @@ export const useVideoStore = defineStore('video_call', {
     staticPeer: null as unknown,
     currentLocalMDC: null as unknown as MediaConnection,
     currentRemoteMDC: null as unknown as MediaConnection,
-    dataConnection: null as unknown as DataConnection
+    currentLocalShareMDC: null as unknown as MediaConnection,
+    dataConnection: null as unknown as DataConnection,
+    remoteMetadata: null as unknown,
+    currentShareMDC: null as unknown as MediaConnection
   }),
   getters: {
     getStatusToolbar: (state) => ({

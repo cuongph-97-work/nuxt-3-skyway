@@ -2,21 +2,23 @@
 import { useVideoStore } from '~~/stores/video'
 
 const toolbarStore = useVideoStore()
-const localVideoStream = computed(() => toolbarStore.getLocalVideoStream)
+const remoteVideoStream = computed(() => toolbarStore.getRemoteVideoStream)
 </script>
 <template>
-  <div class="cam-container" id="myCam">
+  <div class="cam-container">
     <div class="video">
       <video
-        ref="myVideoRef"
+        ref="remoteVideoRef"
         muted="true"
-        :srcObject="localVideoStream"
+        :srcObject="remoteVideoStream"
         playsinline
         autoplay
       ></video>
     </div>
     <div class="content">
-      <span class="name">You</span>
+      <span class="name">{{
+        (toolbarStore.remoteMetadata as any)?.name || 'Anonymous'
+      }}</span>
     </div>
   </div>
 </template>

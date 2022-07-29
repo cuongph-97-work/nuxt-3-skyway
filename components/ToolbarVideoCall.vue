@@ -12,7 +12,7 @@ onMounted(() => {
     async (isOn) => {
       if (isOn) {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: !!isOn,
+          video: !!isOn && !!toolbarStore.videos?.length,
           audio: !!toolbar.value.micOn
         })
         toolbarStore.setStreamLocalVideo(stream)
@@ -25,10 +25,10 @@ onMounted(() => {
       }
       nextTick(() => {
         const playPause = (video: any) => {
-          if (video.paused) video.play()
-          else video.pause()
+          if (video.paused) video?.play()
+          else video?.pause()
         }
-        const camElement = document.querySelector('.cam-container')
+        const camElement = document.querySelector('#myCam')
         playPause(camElement?.querySelector('video'))
         camElement?.classList.toggle('disabled')
       })
@@ -42,32 +42,22 @@ onMounted(() => {
         const displayMediaOptions = {
           video: true,
           audio: false
-          // audio: {
-          //   echoCancellation: true,
-          //   noiseSuppression: true
-          // }
         }
         nextTick(() => {
           navigator.mediaDevices
             .getDisplayMedia(displayMediaOptions)
             .then((screenStream) => {
               toolbarStore.setStreamShareVideo(screenStream)
-              screenStream.getVideoTracks().forEach((videoTrack) => {
-                videoTrack.onended = () => {
-                  // toolbarConfig.shareScreen = {
-                  //   status: false,
-                  //   videoTrack: null,
-                  //   stream: null
-                  // }
-                  // emits('onChangeToolbar', toolbarConfig)
-                  return
+              toolbarStore.currentLocalShareMDC = staticPeer.value?.call(
+                toolbarStore.remoteId,
+                screenStream,
+                {
+                  metadata: {
+                    name: 'Cường Phan',
+                    type: 'share_screen'
+                  }
                 }
-              })
-              // Object.assign(toolbarConfig.shareScreen, {
-              //   status: true,
-              //   stream: screenStream
-              // })
-              // emits('onChangeToolbar', toolbarConfig)
+              )
             })
             .catch((err) => {
               console.log('Unable to get display media ' + err)
@@ -76,23 +66,17 @@ onMounted(() => {
         })
       } else {
         toolbarStore.stopShareScreen()
-        // nextTick(() => {
-        //   // toolbarConfig.shareScreen = {
-        //   //   status: false,
-        //   //   videoTrack: null,
-        //   //   stream: null
-        //   // }
-        //   // emits('onChangeToolbar', toolbarConfig)
-        // })
+        toolbarStore.currentLocalShareMDC.close()
       }
     }
   )
   watch(
     () => toolbar.value.micOn,
     (isOn: boolean) => {
-      localVideoStream.value
-        ?.getAudioTracks()
-        .forEach((track) => (track.enabled = isOn))
+      localVideoStream.value?.getAudioTracks().forEach((track) => {
+        console.log(track)
+        track.enabled = isOn
+      })
     }
   )
 })
@@ -168,7 +152,8 @@ onMounted(() => {
       </button>
       <button
         class="button-share-element"
-        :class="toolbar.shareOn ? 'active' : ''"
+        :class="toolbar.shareOn || toolbarStore.isRemoteSharing ? 'active' : ''"
+        :disabled="toolbarStore.isRemoteSharing"
         @click="toolbarStore.toggleShareBtn"
       >
         <span class="icon icon-share" :class="toolbar.shareOn ? 'active' : ''">
